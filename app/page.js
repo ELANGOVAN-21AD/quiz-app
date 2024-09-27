@@ -1,101 +1,136 @@
-import Image from "next/image";
+"use client";
+import { useState, useEffect, useRef } from 'react';
+import WebPageRecorder from '@/hlper/webpageRecorder'; // Assuming the WebPageRecorder class is in the same folder
+
+const questions = [
+  {
+    question: "Which of the following brands have you purchased from in the last 6 months?",
+    options: ["Apple", "Samsung", "Nike", "Adidas"],
+    color: "bg-blue-500",
+  },
+  {
+    question: "How often do you shop online?",
+    options: ["Once a week", "Once a month", "A few times a year", "Rarely"],
+    color: "bg-green-500",
+  },
+  {
+    question: "Which factor is most important to you when making a purchase?",
+    options: ["Price", "Brand reputation", "Product quality", "Customer service"],
+    color: "bg-red-500",
+  },
+  {
+    question: "How do you usually hear about new products?",
+    options: ["Social media", "Friends and family", "Advertisements", "In-store displays"],
+    color: "bg-purple-500",
+  },
+  {
+    question: "Which type of products do you purchase most frequently?",
+    options: ["Electronics", "Clothing", "Home essentials", "Food and beverages"],
+    color: "bg-yellow-500",
+  },
+];
 
 export default function Home() {
-  return (
-    <div className="grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20 font-[family-name:var(--font-geist-sans)]">
-      <main className="flex flex-col gap-8 row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="https://nextjs.org/icons/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="list-inside list-decimal text-sm text-center sm:text-left font-[family-name:var(--font-geist-mono)]">
-          <li className="mb-2">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] px-1 py-0.5 rounded font-semibold">
-              app/page.js
-            </code>
-            .
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [currentQuestion, setCurrentQuestion] = useState(0);
+  const [answers, setAnswers] = useState([]);
+  const [quizComplete, setQuizComplete] = useState(false);
+  const [clicks, setClicks] = useState([]); // Track click coordinates
+  const [videoBlob, setVideoBlob] = useState(null);
+  const recorderRef = useRef(null);
+  const surveyRef = useRef(null);
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+  // Start recording when component mounts
+  useEffect(() => {
+    recorderRef.current = new WebPageRecorder({}, (blob) => {
+      setVideoBlob(blob);
+    }, surveyRef.current);
+    recorderRef.current.startRecording();
+  }, []);
+
+  const handleAnswerClick = (answer, event) => {
+    setAnswers([...answers, answer]);
+
+    // Record the click position
+    const clickMarker = {
+      x: event.clientX,
+      y: event.clientY,
+    };
+    setClicks([...clicks, clickMarker]);
+
+    // Remove the click marker after 2 seconds
+    setTimeout(() => {
+      setClicks((prevClicks) =>
+        prevClicks.filter((_, index) => index !== prevClicks.length - 1)
+      );
+    }, 500);
+
+    if (currentQuestion < questions.length - 1) {
+      setCurrentQuestion(currentQuestion + 1);
+    } else {
+      recorderRef.current.stopRecording();
+      setQuizComplete(true);
+    }
+  };
+
+  const downloadRecording = () => {
+    if (videoBlob) {
+      const url = window.URL.createObjectURL(videoBlob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'recording.webm';
+      a.click();
+    }
+  };
+
+  return (
+    <div
+      ref={surveyRef}
+      className={`${questions[currentQuestion]?.color} min-h-screen flex flex-col justify-center items-center transition-colors duration-500 relative`}
+    >
+      {/* Click markers */}
+      {clicks.map((click, index) => (
+        <span
+          key={index}
+          className="absolute bg-red-500 rounded-full opacity-75"
+          style={{
+            top: `${click.y - 10}px`,
+            left: `${click.x - 10}px`,
+            zIndex: 99,
+            width: '20px',
+            height: '20px',
+            pointerEvents: 'none',
+          }}
+        ></span>
+      ))}
+
+      {quizComplete ? (
+        <div className="bg-white p-10 rounded-lg shadow-md text-center">
+          <h2 className="text-2xl font-bold mb-4 text-green-600">Thank You!</h2>
+          <p className="text-lg text-gray-700">Your responses have been recorded.</p>
+          <button
+            onClick={downloadRecording}
+            className="bg-blue-500 text-white py-2 px-4 rounded-lg mt-4 hover:bg-blue-600 transition duration-300"
           >
-            <Image
-              className="dark:invert"
-              src="https://nextjs.org/icons/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:min-w-44"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
+            Download Recording
+          </button>
         </div>
-      </main>
-      <footer className="row-start-3 flex gap-6 flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="https://nextjs.org/icons/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
+      ) : (
+        <div className="bg-white p-8 rounded-lg shadow-lg max-w-lg w-full">
+          <h2 className="text-xl font-semibold mb-6 text-gray-800">Marketing Survey</h2>
+          <p className="text-lg text-gray-600 mb-4">{questions[currentQuestion].question}</p>
+          <div className="grid grid-cols-1 gap-4 border-[1px] border-gray-200 rounded-lg p-4">
+            {questions[currentQuestion].options.map((option, index) => (
+              <button
+                key={index}
+                onClick={(e) => handleAnswerClick(option, e)}
+                className="relative bg-white text-gray-800 py-2 px-4 rounded-lg shadow-md hover:bg-gray-100 transition duration-300"
+              >
+                {option}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }
