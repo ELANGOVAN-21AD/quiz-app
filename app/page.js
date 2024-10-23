@@ -1,6 +1,7 @@
 "use client";
 import { useState, useEffect, useRef } from 'react';
-import WebPageRecorder from '@/hlper/webpageRecorder'; // Assuming the WebPageRecorder class is in the same folder
+import WebPageRecorder from '@/hlper/webpageRecorder'; // Ensure the path is correct
+import AudioVisualizer from '@/hlper/AudioVisualizer';
 
 const questions = [
   {
@@ -31,33 +32,69 @@ const questions = [
 ];
 
 export default function Home() {
+  // New state to track if the quiz has started
+  const [started, setStarted] = useState(false);
+
   const [currentQuestion, setCurrentQuestion] = useState(0);
   const [answers, setAnswers] = useState([]);
   const [quizComplete, setQuizComplete] = useState(false);
-  const [clicks, setClicks] = useState([]); // Track click coordinates
+  const [clicks, setClicks] = useState([]);
   const [videoBlob, setVideoBlob] = useState(null);
   const recorderRef = useRef(null);
   const surveyRef = useRef(null);
+  const [audioStream, setAudioStream] = useState(null);
 
-  // Start recording when component mounts
   useEffect(() => {
-    recorderRef.current = new WebPageRecorder({}, (blob) => {
-      setVideoBlob(blob);
-    }, surveyRef.current);
-    recorderRef.current.startRecording();
-  }, []);
+    // Only initialize and start recording if quiz has started
+    if (started) {
+      recorderRef.current = new WebPageRecorder(
+        {
+          fps: 30,
+          timeSlice: 3600000,
+          recordUserAudio: true,
+        },
+        (blob) => {
+          setVideoBlob(blob);
+        },
+        surveyRef.current
+      );
+      recorderRef.current.startRecording();
+
+      const getAudioStream = () => {
+        setTimeout(() => {
+          if (recorderRef.current.audioStream) {
+            setAudioStream(recorderRef.current.audioStream);
+          }
+        }, 1000);
+      };
+
+      getAudioStream();
+
+      // Cleanup when component unmounts or when quiz stops
+      return () => {
+        if (recorderRef.current) {
+          recorderRef.current.stopRecording();
+          if (recorderRef.current.audioStream) {
+            recorderRef.current.audioStream.getTracks().forEach((track) => track.stop());
+          }
+        }
+      };
+    }
+  }, [started]); // Dependency array includes 'started'
+
+  const handleStart = () => {
+    setStarted(true);
+  };
 
   const handleAnswerClick = (answer, event) => {
     setAnswers([...answers, answer]);
 
-    // Record the click position
     const clickMarker = {
       x: event.clientX,
       y: event.clientY,
     };
     setClicks([...clicks, clickMarker]);
 
-    // Remove the click marker after 2 seconds
     setTimeout(() => {
       setClicks((prevClicks) =>
         prevClicks.filter((_, index) => index !== prevClicks.length - 1)
@@ -67,7 +104,9 @@ export default function Home() {
     if (currentQuestion < questions.length - 1) {
       setCurrentQuestion(currentQuestion + 1);
     } else {
-      recorderRef.current.stopRecording();
+      if (recorderRef.current) {
+        recorderRef.current.stopRecording();
+      }
       setQuizComplete(true);
     }
   };
@@ -85,9 +124,12 @@ export default function Home() {
   return (
     <div
       ref={surveyRef}
-      className={`${questions[currentQuestion]?.color} min-h-screen flex flex-col justify-center items-center transition-colors duration-500 relative`}
+      className={`min-h-screen flex flex-col justify-center items-center transition-colors duration-500 relative ${
+        started && !quizComplete
+          ? questions[currentQuestion]?.color
+          : 'bg-gray-100'
+      }`}
     >
-      {/* Click markers */}
       {clicks.map((click, index) => (
         <span
           key={index}
@@ -103,18 +145,30 @@ export default function Home() {
         ></span>
       ))}
 
-      {quizComplete ? (
+      {recorderRef.current?.webpageRecorderConfig.recordUserAudio && audioStream && started && !quizComplete && (
+        <div className="absolute top-4 right-4">
+          <AudioVisualizer audioStream={audioStream} />
+        </div>
+      )}
+
+      {/* Start Screen */}
+      {!started && !quizComplete && (
         <div className="bg-white p-10 rounded-lg shadow-md text-center">
-          <h2 className="text-2xl font-bold mb-4 text-green-600">Thank You!</h2>
-          <p className="text-lg text-gray-700">Your responses have been recorded.</p>
+          <h2 className="text-2xl font-bold mb-6 text-gray-800">Welcome to the Marketing Survey</h2>
+          <p className="text-lg text-gray-700 mb-6">
+            We appreciate your time in completing this survey. Click the button below to begin.
+          </p>
           <button
-            onClick={downloadRecording}
-            className="bg-blue-500 text-white py-2 px-4 rounded-lg mt-4 hover:bg-blue-600 transition duration-300"
+            onClick={handleStart}
+            className="bg-blue-500 text-white py-2 px-6 rounded-lg hover:bg-blue-600 transition duration-300"
           >
-            Download Recording
+            Start
           </button>
         </div>
-      ) : (
+      )}
+
+      {/* Quiz Content */}
+      {started && !quizComplete && (
         <div className="bg-white p-8 rounded-lg shadow-lg max-w-lg w-full">
           <h2 className="text-xl font-semibold mb-6 text-gray-800">Marketing Survey</h2>
           <p className="text-lg text-gray-600 mb-4">{questions[currentQuestion].question}</p>
@@ -129,6 +183,20 @@ export default function Home() {
               </button>
             ))}
           </div>
+        </div>
+      )}
+
+      {/* Completion Screen */}
+      {quizComplete && (
+        <div className="bg-white p-10 rounded-lg shadow-md text-center">
+          <h2 className="text-2xl font-bold mb-4 text-green-600">Thank You!</h2>
+          <p className="text-lg text-gray-700">Your responses have been recorded.</p>
+          <button
+            onClick={downloadRecording}
+            className="bg-blue-500 text-white py-2 px-4 rounded-lg mt-4 hover:bg-blue-600 transition duration-300"
+          >
+            Download Recording
+          </button>
         </div>
       )}
     </div>
